@@ -362,14 +362,7 @@ export const zoneDemoSeeds: Record<ZoneId, ZoneDemoSeed> = Object.fromEntries(
   ]),
 ) as Record<ZoneId, ZoneDemoSeed>;
 
-/** Scale factors relative to "today" for demo date presets. */
-export const DATE_PRESET_SCALE: Record<string, number> = {
-  today: 1,
-  yesterday: 0.94,
-  last_7_days: 6.4,
-  last_30_days: 26.5,
-  custom: 3.2,
-};
+export { DATE_PRESET_SCALE } from "@/lib/date-range";
 
 export function buildHourlySeries(weights: number[], totalRides: number): HourlyRidePoint[] {
   const sum = weights.reduce((a, b) => a + b, 0) || 1;

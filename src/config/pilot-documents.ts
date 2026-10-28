@@ -13,6 +13,18 @@ export const PILOT_DOCUMENT_LABELS: Record<PilotDocumentTypeId, string> = {
   ownership_authorisation: "Ownership / lease authorisation",
 };
 
+/** Compact labels for dense list columns (Pilots table “Missing docs”). */
+export const PILOT_DOCUMENT_SHORT_LABELS: Record<PilotDocumentTypeId, string> = {
+  driving_licence: "DL front",
+  driving_licence_back: "DL back",
+  registration_certificate: "RC",
+  vehicle_insurance: "Insurance",
+  commercial_permit: "Permit",
+  fitness_certificate: "Fitness",
+  identity_kyc: "KYC",
+  ownership_authorisation: "Ownership",
+};
+
 export const PILOT_CATEGORY_LABELS: Record<PilotOnboardingCategoryId, string> = {
   bike: "FLYT Bike Taxi",
   auto: "FLYT Auto",
@@ -44,6 +56,10 @@ export function requiredDocumentTypes(
 
 export function pilotDocumentLabel(type: PilotDocumentTypeId): string {
   return PILOT_DOCUMENT_LABELS[type];
+}
+
+export function pilotDocumentShortLabel(type: PilotDocumentTypeId): string {
+  return PILOT_DOCUMENT_SHORT_LABELS[type];
 }
 
 /** Vehicle / RC compliance docs collected during Pilot onboarding. */

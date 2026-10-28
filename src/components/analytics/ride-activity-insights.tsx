@@ -3,11 +3,11 @@
 import {
   formatHourClock,
   formatHourWindow,
-  parseHour,
 } from "@/components/analytics/ride-activity-chart";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
+import { summarizeRideActivity } from "@/lib/ride-activity";
 import type { HourlyRidePoint } from "@/types";
 import {
   ArrowRight,
@@ -23,14 +23,6 @@ import Link from "next/link";
 import { useMemo } from "react";
 
 type DayPart = "Night" | "Morning" | "Afternoon" | "Evening";
-
-function dayPart(hour: string | number): DayPart {
-  const h = parseHour(hour);
-  if (h >= 0 && h < 6) return "Night";
-  if (h >= 6 && h < 12) return "Morning";
-  if (h >= 12 && h < 17) return "Afternoon";
-  return "Evening";
-}
 
 const dayPartMeta: Record<
   DayPart,
@@ -58,48 +50,17 @@ const dayPartMeta: Record<
   },
 };
 
-export function summarizeRideActivity(data: HourlyRidePoint[]) {
-  const total = data.reduce((sum, row) => sum + row.rides, 0);
-  const peak = data.length
-    ? data.reduce((best, row) => (row.rides > best.rides ? row : best))
-    : null;
-  const quiet = data.length
-    ? data.reduce((best, row) => (row.rides < best.rides ? row : best))
-    : null;
-
-  const byPart = (["Night", "Morning", "Afternoon", "Evening"] as DayPart[]).map(
-    (part) => {
-      const rides = data
-        .filter((row) => dayPart(row.hour) === part)
-        .reduce((sum, row) => sum + row.rides, 0);
-      return {
-        part,
-        rides,
-        sharePct: total > 0 ? Math.round((rides / total) * 100) : 0,
-      };
-    },
-  );
-
-  const ranked = [...data].sort((a, b) => b.rides - a.rides).slice(0, 3);
-
-  const busiestPart = byPart.reduce((best, row) =>
-    row.rides > best.rides ? row : best,
-  );
-
-  let plainSummary = "No ride activity recorded for this period.";
-  if (peak && quiet && total > 0) {
-    plainSummary = `Today’s demand peaks around ${formatHourClock(peak.hour)} (${peak.rides} rides in that slot). The quietest window is ${formatHourClock(quiet.hour)}. Most trips fall in the ${busiestPart.part.toLowerCase()} (${busiestPart.sharePct}% of volume).`;
-  }
-
-  return { total, peak, quiet, byPart, ranked, busiestPart, plainSummary };
-}
+export { summarizeRideActivity };
 
 export function RideActivityInsights({
   data,
   analyticsHref = "/analytics?zone=all&period=today",
+  /** When false, omit the total/peak/quiet cards (shown elsewhere on the card). */
+  showSummaryStats = true,
 }: {
   data: HourlyRidePoint[];
   analyticsHref?: string;
+  showSummaryStats?: boolean;
 }) {
   const insights = useMemo(() => summarizeRideActivity(data), [data]);
   const maxPart = Math.max(...insights.byPart.map((p) => p.rides), 1);
@@ -121,29 +82,31 @@ export function RideActivityInsights({
         </div>
         <p className="text-sm leading-relaxed text-ink/90">{insights.plainSummary}</p>
         <p className="mt-2 text-xs text-muted">
-          Each bar is a 2-hour window. Taller bars = more rides that started then. The
-          highlighted bar is the busiest slot.
+          Each point is a 2-hour window on the continuous line. Higher points = more rides that
+          started then. The brighter peak marker is the busiest slot.
         </p>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-3">
-        <InsightStat
-          label="Total rides in chart"
-          value={String(insights.total)}
-          hint="Sum of all 2-hour slots"
-        />
-        <InsightStat
-          label="Peak slot"
-          value={insights.peak ? formatHourClock(insights.peak.hour) : "—"}
-          hint={insights.peak ? `${insights.peak.rides} rides` : undefined}
-          tone="brand"
-        />
-        <InsightStat
-          label="Quietest slot"
-          value={insights.quiet ? formatHourClock(insights.quiet.hour) : "—"}
-          hint={insights.quiet ? `${insights.quiet.rides} rides` : undefined}
-        />
-      </div>
+      {showSummaryStats ? (
+        <div className="grid gap-3 sm:grid-cols-3">
+          <InsightStat
+            label="Total rides in chart"
+            value={String(insights.total)}
+            hint="Sum of all 2-hour slots"
+          />
+          <InsightStat
+            label="Peak slot"
+            value={insights.peak ? formatHourClock(insights.peak.hour) : "—"}
+            hint={insights.peak ? `${insights.peak.rides} rides` : undefined}
+            tone="brand"
+          />
+          <InsightStat
+            label="Quietest slot"
+            value={insights.quiet ? formatHourClock(insights.quiet.hour) : "—"}
+            hint={insights.quiet ? `${insights.quiet.rides} rides` : undefined}
+          />
+        </div>
+      ) : null}
 
       <div>
         <div className="mb-2 flex items-center gap-2">

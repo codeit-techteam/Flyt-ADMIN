@@ -84,12 +84,22 @@ function PilotsContent() {
     {
       key: "docs",
       header: "Missing docs",
-      render: (p) =>
-        p.documentsMissing.length ? (
-          <span className="text-xs text-warning">{p.documentsMissing.join(", ")}</span>
-        ) : (
-          <span className="text-xs text-success">Complete</span>
-        ),
+      className: "max-w-[11rem]",
+      render: (p) => {
+        if (!p.documentsMissing.length) {
+          return <span className="text-xs text-success">Complete</span>;
+        }
+        const full = p.documentsMissing.join(", ");
+        const preview =
+          p.documentsMissing.length <= 2
+            ? full
+            : `${p.documentsMissing.slice(0, 2).join(", ")} +${p.documentsMissing.length - 2}`;
+        return (
+          <span className="block truncate text-xs text-warning" title={full}>
+            {preview}
+          </span>
+        );
+      },
     },
     {
       key: "rating",

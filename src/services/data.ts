@@ -1,5 +1,7 @@
 import { env } from "@/config/env";
 import { ALL_ZONES_ID, OPERATIONAL_ZONES, type ZoneSelectionId } from "@/config/zones";
+import { resolveDateRange } from "@/lib/date-range";
+import { resolveRideActivitySeries } from "@/lib/ride-activity";
 import type {
   AdminNotification,
   AdminUser,
@@ -8,11 +10,13 @@ import type {
   Customer,
   DashboardKpis,
   DataMode,
+  DateRangePreset,
   LiveOperationsSnapshot,
   LocationAlertTrigger,
   OutboundNotification,
   Pilot,
   PromoCode,
+  ReportingDateRange,
   Ride,
   RideTimelineEvent,
   SosIncident,
@@ -51,12 +55,34 @@ export function getDataMode(): DataMode {
   return "demo";
 }
 
-export async function getDashboard() {
+export async function getDashboard(options?: {
+  period?: ReportingDateRange;
+  preset?: DateRangePreset;
+  from?: string;
+  to?: string;
+}) {
   await delay();
+  const period =
+    options?.period ??
+    resolveDateRange(options?.preset ?? "today", {
+      from: options?.from,
+      to: options?.to,
+    });
+
+  const mode = getDataMode();
+  const { activity, isDemo } = resolveRideActivitySeries({
+    rides: demoRides,
+    period,
+    demoSeries: rideActivitySeries,
+    forceDemo: mode === "demo",
+  });
+
   return {
-    mode: getDataMode(),
+    mode,
+    isDemo,
+    period,
     kpis: demoKpis as DashboardKpis,
-    activity: rideActivitySeries,
+    activity,
     events: operationalEvents,
     recentRides: demoRides.slice(0, 8),
     pendingApprovals: demoPilots.filter((p) =>

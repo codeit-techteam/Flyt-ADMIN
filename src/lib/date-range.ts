@@ -47,3 +47,12 @@ export const DATE_PRESET_LABELS: Record<DateRangePreset, string> = {
   last_30_days: "Last 30 days",
   custom: "Custom range",
 };
+
+/** Scale factors relative to "today" for demo date presets. */
+export const DATE_PRESET_SCALE: Record<DateRangePreset, number> = {
+  today: 1,
+  yesterday: 0.94,
+  last_7_days: 6.4,
+  last_30_days: 26.5,
+  custom: 3.2,
+};

@@ -3,10 +3,9 @@
 import type { HourlyRidePoint } from "@/types";
 import { useMemo } from "react";
 import {
-  Bar,
-  BarChart,
+  Area,
+  AreaChart,
   CartesianGrid,
-  Cell,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -52,24 +51,28 @@ export function formatPeakDescription(peak: HourlyRidePoint | null | undefined):
 function ChartTooltip({
   active,
   payload,
+  totalRides,
 }: {
   active?: boolean;
   payload?: { value: number; payload?: HourlyRidePoint }[];
+  totalRides: number;
 }) {
   if (!active || !payload?.length) return null;
   const point = payload[0]?.payload;
   const hour = point?.hour ?? "00";
   const rides = payload[0]?.value ?? 0;
+  const sharePct = totalRides > 0 ? Math.round((rides / totalRides) * 100) : 0;
 
   return (
     <div
-      className="max-w-[220px] rounded-xl border border-border bg-surface px-3 py-2.5 shadow-[var(--shadow-overlay)]"
+      className="max-w-[240px] rounded-xl border border-border bg-surface px-3 py-2.5 shadow-[var(--shadow-overlay)]"
       role="status"
     >
       <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">Time of day</p>
       <p className="mt-0.5 text-sm font-semibold text-ink">{formatHourWindow(hour)}</p>
       <p className="mt-1.5 text-sm font-bold tabular-nums text-flyt-purple">
         {rides} {rides === 1 ? "ride" : "rides"}
+        <span className="ml-1.5 text-xs font-semibold text-muted">· {sharePct}% of day</span>
       </p>
       <p className="mt-0.5 text-[11px] leading-snug text-muted">
         Number of rides that started in this 2-hour window
@@ -78,9 +81,47 @@ function ChartTooltip({
   );
 }
 
+function PeakDot(props: {
+  cx?: number;
+  cy?: number;
+  payload?: HourlyRidePoint;
+  peakHour: string | null;
+}) {
+  const { cx, cy, payload, peakHour } = props;
+  if (cx == null || cy == null || !payload) return null;
+  const isPeak = peakHour !== null && payload.hour === peakHour;
+
+  if (isPeak) {
+    return (
+      <g>
+        <circle cx={cx} cy={cy} r={8} fill="#a78bfa" fillOpacity={0.35} />
+        <circle
+          cx={cx}
+          cy={cy}
+          r={5}
+          fill="#a78bfa"
+          stroke="#3D1E63"
+          strokeWidth={2}
+        />
+      </g>
+    );
+  }
+
+  return (
+    <circle
+      cx={cx}
+      cy={cy}
+      r={3.5}
+      fill="#5a3488"
+      stroke="#fff"
+      strokeWidth={1.5}
+    />
+  );
+}
+
 export function RideActivityChart({
   data,
-  gradientId = "zoneRideBar",
+  gradientId = "zoneRideArea",
 }: {
   data: HourlyRidePoint[];
   gradientId?: string;
@@ -89,6 +130,11 @@ export function RideActivityChart({
     if (!data.length) return null;
     return data.reduce((best, row) => (row.rides > best.rides ? row : best));
   }, [data]);
+
+  const totalRides = useMemo(
+    () => data.reduce((sum, row) => sum + row.rides, 0),
+    [data],
+  );
 
   const chartData = useMemo(
     () =>
@@ -107,19 +153,18 @@ export function RideActivityChart({
     );
   }
 
+  const peakKey = peakHour?.hour ?? null;
+
   return (
     <div className="flex h-full flex-col">
       <div className="min-h-0 flex-1">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={chartData} barCategoryGap="18%" accessibilityLayer>
+          <AreaChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }} accessibilityLayer>
             <defs>
               <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#5a3488" />
-                <stop offset="100%" stopColor="#3D1E63" />
-              </linearGradient>
-              <linearGradient id={`${gradientId}Peak`} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#a78bfa" />
-                <stop offset="100%" stopColor="#7c3aed" />
+                <stop offset="0%" stopColor="#7c3aed" stopOpacity={0.28} />
+                <stop offset="55%" stopColor="#5a3488" stopOpacity={0.1} />
+                <stop offset="100%" stopColor="#3D1E63" stopOpacity={0.02} />
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="4 4" vertical={false} stroke="#E5E7EB" />
@@ -140,24 +185,37 @@ export function RideActivityChart({
               width={40}
               tickFormatter={(v) => String(v)}
             />
-            <Tooltip content={<ChartTooltip />} cursor={{ fill: "rgba(61,30,99,0.04)" }} />
-            <Bar dataKey="rides" name="Rides" radius={[6, 6, 2, 2]} maxBarSize={36}>
-              {chartData.map((row) => (
-                <Cell
-                  key={row.hour}
-                  fill={
-                    row.hour === peakHour?.hour
-                      ? `url(#${gradientId}Peak)`
-                      : `url(#${gradientId})`
-                  }
+            <Tooltip
+              content={<ChartTooltip totalRides={totalRides} />}
+              cursor={{ stroke: "#5a3488", strokeWidth: 1, strokeDasharray: "4 4" }}
+            />
+            <Area
+              type="monotone"
+              dataKey="rides"
+              name="Rides"
+              stroke="#3D1E63"
+              strokeWidth={2.5}
+              fill={`url(#${gradientId})`}
+              activeDot={{
+                r: 7,
+                fill: "#a78bfa",
+                stroke: "#3D1E63",
+                strokeWidth: 2,
+              }}
+              dot={(props) => (
+                <PeakDot
+                  cx={props.cx}
+                  cy={props.cy}
+                  payload={props.payload as HourlyRidePoint | undefined}
+                  peakHour={peakKey}
                 />
-              ))}
-            </Bar>
-          </BarChart>
+              )}
+            />
+          </AreaChart>
         </ResponsiveContainer>
       </div>
       <p className="mt-1 shrink-0 px-1 text-center text-[11px] text-muted">
-        Bottom labels are time of day (a = AM, p = PM). Highlighted bar is the busiest slot.
+        Bottom labels are time of day (a = AM, p = PM). Highlighted point is the busiest slot.
       </p>
     </div>
   );

@@ -1,4 +1,4 @@
-import { pilotDocumentLabel, requiredDocumentTypes } from "@/config/pilot-documents";
+import { pilotDocumentShortLabel, requiredDocumentTypes } from "@/config/pilot-documents";
 import type {
   PilotBankDetails,
   PilotDocumentRecord,
@@ -192,25 +192,22 @@ export function buildPilotOnboarding(seed: SeedInput): PilotOnboarding {
   };
 }
 
-/** Labels for list “Missing docs” column from structured onboarding docs + selfie. */
+/** Compact labels for list “Missing docs” column from structured onboarding docs + selfie. */
 export function missingDocLabels(onboarding: PilotOnboarding): string[] {
   const missing = onboarding.documents
     .filter((d) => d.status === "missing" || d.status === "rejected" || d.status === "expired")
-    .map((d) =>
-      d.status === "rejected"
-        ? `${pilotDocumentLabel(d.type)} (rejected)`
-        : d.status === "expired"
-          ? `${pilotDocumentLabel(d.type)} (expired)`
-          : pilotDocumentLabel(d.type),
-    );
+    .map((d) => {
+      const label = pilotDocumentShortLabel(d.type);
+      if (d.status === "rejected") return `${label} · rej`;
+      if (d.status === "expired") return `${label} · exp`;
+      return label;
+    });
   if (
     onboarding.identitySelfie.status === "missing" ||
     onboarding.identitySelfie.status === "rejected"
   ) {
     missing.push(
-      onboarding.identitySelfie.status === "rejected"
-        ? "Live selfie (rejected)"
-        : "Live selfie",
+      onboarding.identitySelfie.status === "rejected" ? "Selfie · rej" : "Selfie",
     );
   }
   return missing;

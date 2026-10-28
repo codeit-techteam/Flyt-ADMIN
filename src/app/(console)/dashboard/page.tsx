@@ -1,7 +1,9 @@
 "use client";
 
+import { DateRangeFilter } from "@/components/analytics/date-range-filter";
 import {
   RideActivityChart,
+  formatHourClock,
   formatPeakDescription,
   usePeakHour,
 } from "@/components/analytics/ride-activity-chart";
@@ -13,10 +15,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DataTable, type Column } from "@/components/tables/data-table";
+import { DATE_PRESET_LABELS, resolveDateRange } from "@/lib/date-range";
 import { formatInr, formatRelative } from "@/lib/format";
+import { summarizeRideActivity } from "@/lib/ride-activity";
 import { rideStatusLabel, rideTone, severityTone, verificationLabel, verificationTone } from "@/lib/status";
 import { getDashboard } from "@/services/data";
-import type { Pilot, Ride, SosIncident, Vehicle } from "@/types";
+import type { DateRangePreset, Pilot, Ride, SosIncident, Vehicle } from "@/types";
 import {
   Activity,
   AlertTriangle,
@@ -25,6 +29,7 @@ import {
   CheckCircle2,
   ChevronDown,
   CircleDot,
+  FlaskConical,
   IndianRupee,
   MapPin,
   Radio,
@@ -37,22 +42,53 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 export default function DashboardPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
+  const [activityLoading, setActivityLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [analyticsOpen, setAnalyticsOpen] = useState(false);
+  const [preset, setPreset] = useState<DateRangePreset>("today");
+  const [customFrom, setCustomFrom] = useState(() => resolveDateRange("custom").from);
+  const [customTo, setCustomTo] = useState(() => resolveDateRange("custom").to);
   const [data, setData] = useState<Awaited<ReturnType<typeof getDashboard>> | null>(null);
 
+  const period = useMemo(
+    () => resolveDateRange(preset, { from: customFrom, to: customTo }),
+    [preset, customFrom, customTo],
+  );
+
   useEffect(() => {
-    getDashboard().then((d) => {
-      setData(d);
-      setLoading(false);
-    });
-  }, []);
+    let cancelled = false;
+    setActivityLoading(true);
+    setError(null);
+
+    getDashboard({ period })
+      .then((d) => {
+        if (cancelled) return;
+        setData(d);
+        setLoading(false);
+        setActivityLoading(false);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setError("Failed to load ride activity. Please try again.");
+        setLoading(false);
+        setActivityLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [period]);
 
   const peakHour = usePeakHour(data?.activity ?? []);
+  const activitySummary = useMemo(
+    () => summarizeRideActivity(data?.activity ?? []),
+    [data?.activity],
+  );
 
   const rideColumns: Column<Ride>[] = [
     {
@@ -261,31 +297,122 @@ export default function DashboardPage() {
       <section className="grid gap-4 xl:grid-cols-3">
         <Card className="xl:col-span-2">
           <CardHeader
-            title="Ride activity today"
-            description={formatPeakDescription(peakHour)}
+            title="Ride Activity Today"
+            description={
+              preset === "today"
+                ? formatPeakDescription(peakHour)
+                : `${DATE_PRESET_LABELS[preset]} · ${formatPeakDescription(peakHour)}`
+            }
             action={
-              <Button
-                type="button"
-                variant={analyticsOpen ? "secondary" : "outline"}
-                size="sm"
-                className="relative z-10 shrink-0"
-                aria-expanded={analyticsOpen}
-                onClick={() => setAnalyticsOpen((open) => !open)}
-              >
-                {analyticsOpen ? "Hide details" : "Expand analytics"}
-                <ChevronDown
-                  className={`h-3.5 w-3.5 transition duration-200 ${analyticsOpen ? "rotate-180" : ""}`}
-                />
-              </Button>
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                {data.isDemo ? (
+                  <Badge tone="warning">
+                    <span className="inline-flex items-center gap-1">
+                      <FlaskConical className="h-3 w-3" />
+                      DEMO DATA
+                    </span>
+                  </Badge>
+                ) : null}
+                <Button
+                  type="button"
+                  variant={analyticsOpen ? "secondary" : "outline"}
+                  size="sm"
+                  className="relative z-10 shrink-0"
+                  aria-expanded={analyticsOpen}
+                  onClick={() => setAnalyticsOpen((open) => !open)}
+                >
+                  {analyticsOpen ? "Hide details" : "Expand analytics"}
+                  <ChevronDown
+                    className={`h-3.5 w-3.5 transition duration-200 ${analyticsOpen ? "rotate-180" : ""}`}
+                  />
+                </Button>
+              </div>
             }
           />
           <CardBody className="pt-2">
-            <div className="flex h-[22rem] flex-col">
-              <RideActivityChart data={data.activity} gradientId="dashRideBar" />
+            <div className="mb-4">
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted">
+                Reporting period
+              </p>
+              <DateRangeFilter
+                period={period}
+                onPresetChange={setPreset}
+                onCustomChange={({ from, to }) => {
+                  setCustomFrom(from);
+                  setCustomTo(to);
+                }}
+              />
+            </div>
+
+            <div className="mb-4 grid gap-3 sm:grid-cols-3">
+              <div className="rounded-xl border border-border bg-surface p-3">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">
+                  Total rides
+                </p>
+                <p className="mt-1 text-lg font-bold tabular-nums text-ink">
+                  {activitySummary.total.toLocaleString("en-IN")}
+                </p>
+                <p className="mt-0.5 text-xs text-muted">
+                  {preset === "today" || preset === "yesterday"
+                    ? "Sum of 2-hour slots"
+                    : "Typical day pattern for range"}
+                </p>
+              </div>
+              <div className="rounded-xl border border-flyt-purple/20 bg-flyt-purple-soft/40 p-3">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">
+                  Peak time
+                </p>
+                <p className="mt-1 text-lg font-bold text-ink">
+                  {activitySummary.peak
+                    ? formatHourClock(activitySummary.peak.hour)
+                    : "—"}
+                </p>
+                <p className="mt-0.5 text-xs text-muted">
+                  {activitySummary.peak
+                    ? `${activitySummary.peak.rides} rides`
+                    : "No peak yet"}
+                </p>
+              </div>
+              <div className="rounded-xl border border-border bg-surface p-3">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">
+                  Quietest time
+                </p>
+                <p className="mt-1 text-lg font-bold text-ink">
+                  {activitySummary.quiet
+                    ? formatHourClock(activitySummary.quiet.hour)
+                    : "—"}
+                </p>
+                <p className="mt-0.5 text-xs text-muted">
+                  {activitySummary.quiet
+                    ? `${activitySummary.quiet.rides} rides`
+                    : "No quiet slot yet"}
+                </p>
+              </div>
+            </div>
+
+            {error ? (
+              <div className="mb-3 rounded-xl border border-danger/20 bg-danger-soft/50 px-3 py-2.5 text-sm text-danger">
+                {error}
+              </div>
+            ) : null}
+
+            <div
+              className={`flex h-[22rem] flex-col transition-opacity ${activityLoading ? "opacity-50" : ""}`}
+              aria-busy={activityLoading}
+            >
+              {activityLoading && !data.activity.length ? (
+                <Skeleton className="h-full w-full rounded-xl" />
+              ) : (
+                <RideActivityChart data={data.activity} gradientId="dashRideArea" />
+              )}
             </div>
             {analyticsOpen ? (
               <div className="mt-2">
-                <RideActivityInsights data={data.activity} />
+                <RideActivityInsights
+                  data={data.activity}
+                  showSummaryStats={false}
+                  analyticsHref={`/analytics?zone=all&period=${preset === "custom" ? "today" : preset}`}
+                />
               </div>
             ) : (
               <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-dashed border-border bg-ground/40 px-3 py-2.5">
