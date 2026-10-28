@@ -1,5 +1,12 @@
 "use client";
 
+import {
+  RideActivityChart,
+  formatPeakDescription,
+  usePeakHour,
+} from "@/components/analytics/ride-activity-chart";
+import { RideActivityInsights } from "@/components/analytics/ride-activity-insights";
+import { ZoneOpsSection } from "@/components/analytics/zone-ops-section";
 import { KpiCard } from "@/components/dashboard/kpi-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -9,13 +16,14 @@ import { DataTable, type Column } from "@/components/tables/data-table";
 import { formatInr, formatRelative } from "@/lib/format";
 import { rideStatusLabel, rideTone, severityTone, verificationLabel, verificationTone } from "@/lib/status";
 import { getDashboard } from "@/services/data";
-import type { Pilot, Ride, SosIncident } from "@/types";
+import type { Pilot, Ride, SosIncident, Vehicle } from "@/types";
 import {
   Activity,
   AlertTriangle,
   ArrowRight,
   Car,
   CheckCircle2,
+  ChevronDown,
   CircleDot,
   IndianRupee,
   MapPin,
@@ -29,39 +37,12 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
-
-function ChartTooltip({
-  active,
-  payload,
-  label,
-}: {
-  active?: boolean;
-  payload?: { value: number }[];
-  label?: string;
-}) {
-  if (!active || !payload?.length) return null;
-  return (
-    <div className="rounded-xl border border-border bg-surface px-3 py-2 shadow-[var(--shadow-overlay)]">
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">{label}:00</p>
-      <p className="mt-0.5 text-sm font-bold tabular-nums text-ink">{payload[0].value} rides</p>
-    </div>
-  );
-}
+import { useEffect, useState } from "react";
 
 export default function DashboardPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
+  const [analyticsOpen, setAnalyticsOpen] = useState(false);
   const [data, setData] = useState<Awaited<ReturnType<typeof getDashboard>> | null>(null);
 
   useEffect(() => {
@@ -71,10 +52,7 @@ export default function DashboardPage() {
     });
   }, []);
 
-  const peakHour = useMemo(() => {
-    if (!data?.activity?.length) return null;
-    return data.activity.reduce((best, row) => (row.rides > best.rides ? row : best));
-  }, [data]);
+  const peakHour = usePeakHour(data?.activity ?? []);
 
   const rideColumns: Column<Ride>[] = [
     {
@@ -281,64 +259,52 @@ export default function DashboardPage() {
 
       {/* Chart + status */}
       <section className="grid gap-4 xl:grid-cols-3">
-        <Card className="overflow-hidden xl:col-span-2">
+        <Card className="xl:col-span-2">
           <CardHeader
             title="Ride activity today"
-            description={
-              peakHour
-                ? `Peak at ${peakHour.hour}:00 · ${peakHour.rides} rides`
-                : "Hourly ride volume"
-            }
+            description={formatPeakDescription(peakHour)}
             action={
-              <Link
-                href="/analytics"
-                className="inline-flex items-center gap-1 text-xs font-semibold text-flyt-purple hover:underline"
+              <Button
+                type="button"
+                variant={analyticsOpen ? "secondary" : "outline"}
+                size="sm"
+                className="relative z-10 shrink-0"
+                aria-expanded={analyticsOpen}
+                onClick={() => setAnalyticsOpen((open) => !open)}
               >
-                Analytics
-                <ArrowRight className="h-3 w-3" />
-              </Link>
+                {analyticsOpen ? "Hide details" : "Expand analytics"}
+                <ChevronDown
+                  className={`h-3.5 w-3.5 transition duration-200 ${analyticsOpen ? "rotate-180" : ""}`}
+                />
+              </Button>
             }
           />
-          <CardBody className="h-80 pt-2">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={data.activity} barCategoryGap="18%">
-                <defs>
-                  <linearGradient id="rideBar" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#5a3488" />
-                    <stop offset="100%" stopColor="#3D1E63" />
-                  </linearGradient>
-                  <linearGradient id="rideBarPeak" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#a78bfa" />
-                    <stop offset="100%" stopColor="#7c3aed" />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="4 4" vertical={false} stroke="#E5E7EB" />
-                <XAxis
-                  dataKey="hour"
-                  tickLine={false}
-                  axisLine={false}
-                  fontSize={11}
-                  tick={{ fill: "#6B7280" }}
-                  dy={6}
-                />
-                <YAxis
-                  tickLine={false}
-                  axisLine={false}
-                  fontSize={11}
-                  tick={{ fill: "#6B7280" }}
-                  width={32}
-                />
-                <Tooltip content={<ChartTooltip />} cursor={{ fill: "rgba(61,30,99,0.04)" }} />
-                <Bar dataKey="rides" radius={[6, 6, 2, 2]} maxBarSize={36}>
-                  {data.activity.map((row) => (
-                    <Cell
-                      key={row.hour}
-                      fill={row.hour === peakHour?.hour ? "url(#rideBarPeak)" : "url(#rideBar)"}
-                    />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+          <CardBody className="pt-2">
+            <div className="flex h-[22rem] flex-col">
+              <RideActivityChart data={data.activity} gradientId="dashRideBar" />
+            </div>
+            {analyticsOpen ? (
+              <div className="mt-2">
+                <RideActivityInsights data={data.activity} />
+              </div>
+            ) : (
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-dashed border-border bg-ground/40 px-3 py-2.5">
+                <p className="text-xs text-muted">
+                  Click <span className="font-semibold text-ink">Expand analytics</span> for a
+                  plain-language breakdown of peak hours and demand.
+                </p>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="shrink-0 text-flyt-purple"
+                  onClick={() => setAnalyticsOpen(true)}
+                >
+                  Show details
+                  <ChevronDown className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            )}
           </CardBody>
         </Card>
 
@@ -399,33 +365,40 @@ export default function DashboardPage() {
       </section>
 
       {/* Secondary metrics strip */}
-      <section className="grid gap-3 sm:grid-cols-3">
+      <section className="grid auto-rows-fr gap-3 sm:grid-cols-3">
         <KpiCard
           label="Completed"
           value={String(kpis.completedRides)}
+          hint="Open completed rides"
           icon={CheckCircle2}
           tone="success"
+          href="/rides?status=completed"
         />
         <KpiCard
           label="Cancelled"
           value={String(kpis.cancelledRides)}
+          hint="Open cancelled rides"
           icon={XCircle}
           tone="danger"
+          href="/rides?status=cancelled"
         />
         <KpiCard
           label="Registered customers"
           value={kpis.registeredCustomers.toLocaleString("en-IN")}
+          hint="Open customer directory"
           icon={Users}
           href="/customers"
         />
       </section>
+
+      <ZoneOpsSection />
 
       {/* Bottom grid */}
       <section className="grid gap-4 xl:grid-cols-3">
         <Card className="overflow-hidden xl:col-span-2">
           <CardHeader
             title="Recent rides"
-            description="Latest Hyderabad activity"
+            description={`${data.recentRides.length} latest Hyderabad trips · click a row for details`}
             action={
               <Link
                 href="/rides"
@@ -440,6 +413,8 @@ export default function DashboardPage() {
             columns={rideColumns}
             rows={data.recentRides}
             onRowClick={(r) => router.push(`/rides/${r.id}`)}
+            emptyTitle="No recent rides"
+            emptyDescription="Demo rides will appear here."
           />
         </Card>
 
@@ -448,31 +423,45 @@ export default function DashboardPage() {
             <CardHeader
               title="Critical alerts"
               description={`${data.criticalAlerts.length} open`}
-              action={<Badge tone="danger">SOS</Badge>}
+              action={
+                <Link href="/safety" className="text-xs font-semibold text-flyt-purple hover:underline">
+                  SOS queue
+                </Link>
+              }
             />
             <CardBody className="space-y-2.5">
-              {data.criticalAlerts.map((incident: SosIncident) => (
-                <Link
-                  key={incident.id}
-                  href={`/safety/${incident.id}`}
-                  className="block rounded-xl border border-red-100 bg-gradient-to-br from-danger-soft/80 to-surface p-3 transition hover:border-red-200 hover:shadow-sm"
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-mono text-xs font-semibold text-danger">{incident.id}</span>
-                    <Badge tone={severityTone(incident.severity)}>{incident.severity}</Badge>
-                  </div>
-                  <p className="mt-1.5 line-clamp-2 text-sm text-ink">{incident.summary}</p>
-                  <p className="mt-1 text-xs text-muted">{formatRelative(incident.openedAt)}</p>
-                </Link>
-              ))}
+              {data.criticalAlerts.length === 0 ? (
+                <p className="text-sm text-muted">No open SOS incidents.</p>
+              ) : (
+                data.criticalAlerts.map((incident: SosIncident) => (
+                  <Link
+                    key={incident.id}
+                    href={`/safety/${incident.id}`}
+                    className="block rounded-xl border border-red-100 bg-gradient-to-br from-danger-soft/80 to-surface p-3 transition hover:border-red-200 hover:shadow-sm"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-mono text-xs font-semibold text-danger">
+                        {incident.id}
+                      </span>
+                      <Badge tone={severityTone(incident.severity)}>{incident.severity}</Badge>
+                    </div>
+                    <p className="mt-1.5 line-clamp-2 text-sm text-ink">{incident.summary}</p>
+                    <p className="mt-1 text-xs text-muted">{formatRelative(incident.openedAt)}</p>
+                  </Link>
+                ))
+              )}
             </CardBody>
           </Card>
 
           <Card>
             <CardHeader
               title="Pending approvals"
+              description="Pilot verification backlog"
               action={
-                <Link href="/pilots?verification=under_review" className="text-xs font-semibold text-flyt-purple hover:underline">
+                <Link
+                  href="/pilots?verification=under_review"
+                  className="text-xs font-semibold text-flyt-purple hover:underline"
+                >
                   Review
                 </Link>
               }
@@ -504,36 +493,114 @@ export default function DashboardPage() {
               ))}
             </CardBody>
           </Card>
+        </div>
+      </section>
 
-          <Card>
-            <CardHeader title="Operational events" />
-            <CardBody>
-              <ol className="relative space-y-0 border-l border-border pl-4">
-                {data.events.map((event, index) => (
-                  <li key={event.id} className="relative pb-4 last:pb-0">
-                    <span
-                      className={`absolute -left-[1.28rem] top-1.5 h-2.5 w-2.5 rounded-full ring-4 ring-surface ${
-                        event.tone === "danger"
-                          ? "bg-danger"
-                          : event.tone === "warning"
-                            ? "bg-warning"
-                            : event.tone === "success"
-                              ? "bg-success"
-                              : "bg-info"
-                      }`}
-                    />
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <p className="text-sm leading-snug text-ink">{event.title}</p>
-                        <p className="mt-0.5 text-xs text-muted">{formatRelative(event.at)}</p>
-                      </div>
-                      {index === 0 ? <Badge tone="brand">new</Badge> : null}
+      <section className="grid gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader
+            title="Fleet attention"
+            description="Vehicles needing verification or Pilot assignment"
+            action={
+              <Link
+                href="/vehicles"
+                className="text-xs font-semibold text-flyt-purple hover:underline"
+              >
+                All vehicles
+              </Link>
+            }
+          />
+          <CardBody className="space-y-2">
+            {[...data.pendingVehicles, ...data.unassignedVehicles]
+              .filter(
+                (v, index, arr) => arr.findIndex((item) => item.id === v.id) === index,
+              )
+              .slice(0, 5)
+              .map((vehicle: Vehicle) => (
+                <Link
+                  key={vehicle.id}
+                  href={`/vehicles/${vehicle.id}`}
+                  className="flex items-center justify-between gap-3 rounded-xl border border-border px-3 py-2.5 transition hover:border-flyt-purple/25 hover:bg-flyt-purple-soft/30"
+                >
+                  <div className="min-w-0">
+                    <p className="font-mono text-xs font-semibold text-flyt-purple">
+                      {vehicle.plate}
+                    </p>
+                    <p className="truncate text-sm text-ink">
+                      {vehicle.make} {vehicle.model}
+                      {!vehicle.pilotId ? " · Unassigned" : ""}
+                    </p>
+                  </div>
+                  <Badge tone={verificationTone(vehicle.verification)}>
+                    {verificationLabel[vehicle.verification]}
+                  </Badge>
+                </Link>
+              ))}
+            {data.pendingVehicles.length === 0 && data.unassignedVehicles.length === 0 ? (
+              <p className="text-sm text-muted">Fleet is clear — no pending vehicle actions.</p>
+            ) : null}
+          </CardBody>
+        </Card>
+
+        <Card>
+          <CardHeader title="Operational events" description="City-wide ops feed" />
+          <CardBody>
+            <ol className="relative space-y-0 border-l border-border pl-4">
+              {data.events.map((event, index) => (
+                <li key={event.id} className="relative pb-4 last:pb-0">
+                  <span
+                    className={`absolute -left-[1.28rem] top-1.5 h-2.5 w-2.5 rounded-full ring-4 ring-surface ${
+                      event.tone === "danger"
+                        ? "bg-danger"
+                        : event.tone === "warning"
+                          ? "bg-warning"
+                          : event.tone === "success"
+                            ? "bg-success"
+                            : "bg-info"
+                    }`}
+                  />
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="text-sm leading-snug text-ink">{event.title}</p>
+                      <p className="mt-0.5 text-xs text-muted">{formatRelative(event.at)}</p>
                     </div>
-                  </li>
-                ))}
-              </ol>
-            </CardBody>
-          </Card>
+                    {index === 0 ? <Badge tone="brand">new</Badge> : null}
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </CardBody>
+        </Card>
+      </section>
+
+      <section className="rounded-2xl border border-border bg-gradient-to-br from-flyt-purple-soft/40 via-surface to-surface p-5 shadow-[var(--shadow-card)]">
+        <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h2 className="text-sm font-semibold text-ink">Jump to operations</h2>
+            <p className="text-xs text-muted">Shortcuts for the most common admin workflows</p>
+          </div>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {[
+            { href: "/live-operations?zone=all", label: "Live Operations", hint: "Active rides & SOS" },
+            { href: "/service-areas", label: "Service Areas", hint: "Hyderabad zones" },
+            { href: "/vehicles?verification=under_review", label: "Vehicle review", hint: "Fleet verification" },
+            { href: "/analytics?zone=all", label: "Analytics", hint: "Zone reports" },
+          ].map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className="group rounded-xl border border-border bg-surface px-4 py-3 transition hover:-translate-y-0.5 hover:border-flyt-purple/30 hover:shadow-[var(--shadow-card)]"
+            >
+              <p className="text-sm font-semibold text-ink group-hover:text-flyt-purple">
+                {item.label}
+              </p>
+              <p className="mt-0.5 flex items-center justify-between text-xs text-muted">
+                {item.hint}
+                <ArrowRight className="h-3.5 w-3.5 opacity-0 transition group-hover:translate-x-0.5 group-hover:opacity-100" />
+              </p>
+            </Link>
+          ))}
         </div>
       </section>
     </div>

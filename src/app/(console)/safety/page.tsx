@@ -5,6 +5,7 @@ import { DataTable, type Column } from "@/components/tables/data-table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
+import { getZoneLabel } from "@/config/zones";
 import { formatRelative } from "@/lib/format";
 import {
   incidentStatusLabel,
@@ -42,6 +43,11 @@ export default function SafetyPage() {
     },
     { key: "ride", header: "Ride", render: (i) => i.rideId },
     {
+      key: "zone",
+      header: "Zone",
+      render: (i) => getZoneLabel(i.zoneId),
+    },
+    {
       key: "reporter",
       header: "Reporter",
       render: (i) => `${i.reporterName} (${i.reporter})`,
@@ -71,15 +77,22 @@ export default function SafetyPage() {
   return (
     <div className="space-y-4">
       <PageHeader
-        title="Safety & SOS"
-        description="Critical SOS queue for Hyderabad. Support tickets live in the dedicated care desk."
+        title="SOS Queue"
+        description="Critical safety incidents for Hyderabad — respond first, then route care tickets."
         actions={
-          <Link href="/support">
-            <Button variant="secondary" size="sm">
-              <LifeBuoy className="h-4 w-4" />
-              Open support tickets
-            </Button>
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link href="/live-operations?zone=all">
+              <Button variant="outline" size="sm">
+                Live Operations
+              </Button>
+            </Link>
+            <Link href="/support">
+              <Button variant="secondary" size="sm">
+                <LifeBuoy className="h-4 w-4" />
+                Support tickets
+              </Button>
+            </Link>
+          </div>
         }
       />
 

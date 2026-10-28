@@ -2,11 +2,11 @@
 
 import { Logo } from "@/components/layout/logo";
 import { brand } from "@/config/brand";
-import { navGroups } from "@/config/navigation";
+import { SOS_NAV_ITEM, navGroups } from "@/config/navigation";
 import { cn } from "@/lib/cn";
 import { getSession, type SessionUser } from "@/lib/auth";
-import { getUnreadNotificationCount } from "@/services/data";
-import { ChevronDown, MapPin, Sparkles, X } from "lucide-react";
+import { getOpenSosCount, getUnreadNotificationCount } from "@/services/data";
+import { ChevronDown, MapPin, Siren, Sparkles, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -22,11 +22,22 @@ export function Sidebar({
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [user, setUser] = useState<SessionUser | null>(null);
   const [unread, setUnread] = useState(0);
+  const [openSos, setOpenSos] = useState(0);
 
   useEffect(() => {
     setUser(getSession());
-    getUnreadNotificationCount().then(setUnread).catch(() => setUnread(0));
+    Promise.all([getUnreadNotificationCount(), getOpenSosCount()])
+      .then(([n, sos]) => {
+        setUnread(n);
+        setOpenSos(sos);
+      })
+      .catch(() => {
+        setUnread(0);
+        setOpenSos(0);
+      });
   }, [pathname]);
+
+  const sosActive = pathname === "/safety" || pathname.startsWith("/safety/");
 
   const content = (
     <div className="relative flex h-full flex-col overflow-hidden">
@@ -57,12 +68,69 @@ export function Sidebar({
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
             <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
           </span>
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-white/55">Service city</p>
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-white/55">
+            Service city
+          </p>
         </div>
         <p className="mt-1 flex items-center gap-1.5 text-sm font-semibold text-white">
           <MapPin className="h-3.5 w-3.5 text-[#c4a5ef]" />
           Hyderabad · TG
         </p>
+      </div>
+
+      {/* Critical SOS pin — always visible above nav groups */}
+      <div className="relative mx-3 mt-3">
+        <Link
+          href={SOS_NAV_ITEM.href}
+          onClick={onClose}
+          className={cn(
+            "group relative flex items-center gap-3 overflow-hidden rounded-2xl px-3 py-3 ring-1 transition duration-150",
+            sosActive
+              ? "bg-white text-danger shadow-[0_10px_28px_rgba(185,28,28,0.35)] ring-white"
+              : "bg-gradient-to-r from-red-600/95 to-rose-700/90 text-white ring-red-400/40 hover:from-red-500 hover:to-rose-600 hover:shadow-[0_10px_24px_rgba(185,28,28,0.35)]",
+          )}
+          aria-label={`SOS Queue${openSos ? `, ${openSos} open` : ""}`}
+        >
+          {!sosActive ? (
+            <span className="pointer-events-none absolute -right-4 -top-4 h-16 w-16 rounded-full bg-white/15 blur-xl" />
+          ) : null}
+          <span
+            className={cn(
+              "relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl",
+              sosActive ? "bg-danger-soft text-danger" : "bg-white/15 text-white",
+            )}
+          >
+            <Siren className={cn("h-5 w-5", openSos > 0 && !sosActive && "animate-pulse")} />
+          </span>
+          <div className="relative min-w-0 flex-1">
+            <p className="text-[10px] font-bold uppercase tracking-[0.14em] opacity-80">
+              Priority
+            </p>
+            <p className="truncate text-sm font-bold">SOS Queue</p>
+            <p className={cn("truncate text-[11px]", sosActive ? "text-danger/80" : "text-white/80")}>
+              {openSos > 0 ? `${openSos} open incident${openSos === 1 ? "" : "s"}` : "All clear"}
+            </p>
+          </div>
+          {openSos > 0 ? (
+            <span
+              className={cn(
+                "relative rounded-full px-2 py-0.5 text-xs font-bold tabular-nums",
+                sosActive ? "bg-danger text-white" : "bg-white text-danger",
+              )}
+            >
+              {openSos > 9 ? "9+" : openSos}
+            </span>
+          ) : (
+            <span
+              className={cn(
+                "relative rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide",
+                sosActive ? "bg-emerald-100 text-success" : "bg-white/20 text-white",
+              )}
+            >
+              Clear
+            </span>
+          )}
+        </Link>
       </div>
 
       <nav className="relative flex-1 space-y-5 overflow-y-auto px-3 py-4 [scrollbar-width:thin] [scrollbar-color:rgba(255,255,255,0.2)_transparent]">
@@ -102,7 +170,9 @@ export function Sidebar({
                     const active =
                       pathname === item.href || pathname.startsWith(`${item.href}/`);
                     const Icon = item.icon;
-                    const showBadge = item.href === "/notifications" && unread > 0;
+                    const showNotifBadge = item.href === "/notifications" && unread > 0;
+                    const showSosBadge = Boolean(item.showSosBadge) && openSos > 0;
+                    const isDanger = item.emphasis === "danger";
                     return (
                       <li key={item.href}>
                         <Link
@@ -110,26 +180,55 @@ export function Sidebar({
                           onClick={onClose}
                           className={cn(
                             "group relative flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-sm font-medium transition duration-150",
-                            active
-                              ? "bg-white text-flyt-purple shadow-[0_8px_20px_rgba(0,0,0,0.18)]"
-                              : "text-white/75 hover:bg-white/8 hover:text-white",
+                            active && !isDanger && "bg-white text-flyt-purple shadow-[0_8px_20px_rgba(0,0,0,0.18)]",
+                            active &&
+                              isDanger &&
+                              "bg-white text-danger shadow-[0_8px_20px_rgba(185,28,28,0.25)]",
+                            !active &&
+                              isDanger &&
+                              "bg-red-500/15 text-red-100 ring-1 ring-red-400/30 hover:bg-red-500/25 hover:text-white",
+                            !active &&
+                              !isDanger &&
+                              "text-white/75 hover:bg-white/8 hover:text-white",
                           )}
                         >
                           {active ? (
-                            <span className="absolute inset-y-2 left-0 w-1 rounded-full bg-[#7c4db8]" />
+                            <span
+                              className={cn(
+                                "absolute inset-y-2 left-0 w-1 rounded-full",
+                                isDanger ? "bg-danger" : "bg-[#7c4db8]",
+                              )}
+                            />
                           ) : null}
                           <span
                             className={cn(
                               "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition",
-                              active
-                                ? "bg-flyt-purple-soft text-flyt-purple"
-                                : "bg-white/5 text-white/70 group-hover:bg-white/10 group-hover:text-white",
+                              active && isDanger && "bg-danger-soft text-danger",
+                              active && !isDanger && "bg-flyt-purple-soft text-flyt-purple",
+                              !active &&
+                                isDanger &&
+                                "bg-red-500/30 text-white group-hover:bg-red-500/40",
+                              !active &&
+                                !isDanger &&
+                                "bg-white/5 text-white/70 group-hover:bg-white/10 group-hover:text-white",
                             )}
                           >
                             <Icon className="h-4 w-4" />
                           </span>
                           <span className="min-w-0 flex-1 truncate">{item.label}</span>
-                          {showBadge ? (
+                          {showSosBadge ? (
+                            <span
+                              className={cn(
+                                "rounded-full px-1.5 py-0.5 text-[10px] font-bold tabular-nums",
+                                active
+                                  ? "bg-danger text-white"
+                                  : "bg-white text-danger shadow-sm shadow-red-900/30",
+                              )}
+                            >
+                              {openSos > 9 ? "9+" : openSos}
+                            </span>
+                          ) : null}
+                          {showNotifBadge ? (
                             <span
                               className={cn(
                                 "rounded-full px-1.5 py-0.5 text-[10px] font-bold tabular-nums",
@@ -164,8 +263,12 @@ export function Sidebar({
                 .toUpperCase()}
             </span>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold text-white">{user?.name ?? "Admin"}</p>
-              <p className="truncate text-[11px] text-white/50">{user?.role?.replace(/_/g, " ") ?? "ops manager"}</p>
+              <p className="truncate text-sm font-semibold text-white">
+                {user?.name ?? "Admin"}
+              </p>
+              <p className="truncate text-[11px] text-white/50">
+                {user?.role?.replace(/_/g, " ") ?? "ops manager"}
+              </p>
             </div>
             <Sparkles className="h-3.5 w-3.5 shrink-0 text-[#c4a5ef]" />
           </div>

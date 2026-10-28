@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { useToast } from "@/components/ui/toast";
+import { getZoneById } from "@/config/zones";
 import { formatDateTime } from "@/lib/format";
 import { incidentStatusLabel, severityLabel, severityTone } from "@/lib/status";
 import { getIncident } from "@/services/data";
@@ -54,6 +55,15 @@ export default function IncidentDetailPage() {
               </Link>
             </p>
             <p>City: {incident.city}</p>
+            <p>
+              Zone:{" "}
+              <Link
+                href={`/live-operations?zone=${incident.zoneId}`}
+                className="text-flyt-purple hover:underline"
+              >
+                {getZoneById(incident.zoneId)?.name ?? incident.zoneId}
+              </Link>
+            </p>
             <p>
               Reporter: {incident.reporterName} ({incident.reporter})
             </p>

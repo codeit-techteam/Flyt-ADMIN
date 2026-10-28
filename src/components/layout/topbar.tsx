@@ -5,11 +5,14 @@ import { NotificationBell } from "@/components/layout/notification-bell";
 import { Button } from "@/components/ui/button";
 import { getNavLabel } from "@/config/navigation";
 import { clearSession, getSession, type SessionUser } from "@/lib/auth";
+import { cn } from "@/lib/cn";
+import { getOpenSosCount } from "@/services/data";
 import {
   ChevronRight,
   CircleHelp,
   LogOut,
   Menu,
+  Siren,
   UserRound,
 } from "lucide-react";
 import Link from "next/link";
@@ -22,11 +25,19 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
   const menuRef = useRef<HTMLDivElement>(null);
   const [user, setUser] = useState<SessionUser | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [openSos, setOpenSos] = useState(0);
   const title = getNavLabel(pathname);
+  const sosActive = pathname === "/safety" || pathname.startsWith("/safety/");
 
   useEffect(() => {
     setUser(getSession());
   }, []);
+
+  useEffect(() => {
+    getOpenSosCount()
+      .then(setOpenSos)
+      .catch(() => setOpenSos(0));
+  }, [pathname]);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -75,6 +86,34 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
         <div className="flex min-w-0 flex-1 justify-center px-1">
           <GlobalSearch />
         </div>
+
+        <Link
+          href="/safety"
+          className={cn(
+            "relative inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-xs font-bold transition sm:px-3",
+            sosActive
+              ? "bg-danger text-white shadow-sm"
+              : openSos > 0
+                ? "bg-danger text-white shadow-sm shadow-red-200 hover:bg-red-700"
+                : "border border-red-200 bg-danger-soft text-danger hover:border-red-300 hover:bg-red-100",
+          )}
+          aria-label={`SOS Queue${openSos ? `, ${openSos} open` : ""}`}
+        >
+          <Siren className={cn("h-3.5 w-3.5", openSos > 0 && !sosActive && "animate-pulse")} />
+          <span className="hidden sm:inline">SOS</span>
+          {openSos > 0 ? (
+            <span
+              className={cn(
+                "rounded-full px-1.5 py-0.5 text-[10px] font-bold tabular-nums",
+                sosActive || openSos > 0
+                  ? "bg-white/20 text-white"
+                  : "bg-danger text-white",
+              )}
+            >
+              {openSos > 9 ? "9+" : openSos}
+            </span>
+          ) : null}
+        </Link>
 
         <NotificationBell />
 

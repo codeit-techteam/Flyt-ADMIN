@@ -1,4 +1,5 @@
 import { env } from "@/config/env";
+import { ALL_ZONES_ID, OPERATIONAL_ZONES, type ZoneSelectionId } from "@/config/zones";
 import type {
   AdminNotification,
   AdminUser,
@@ -7,6 +8,9 @@ import type {
   Customer,
   DashboardKpis,
   DataMode,
+  LiveOperationsSnapshot,
+  LocationAlertTrigger,
+  OutboundNotification,
   Pilot,
   PromoCode,
   Ride,
@@ -16,6 +20,7 @@ import type {
   Transaction,
   Vehicle,
 } from "@/types";
+import { buildLocationAlertBundle } from "./location-notifications";
 import {
   demoAdmins,
   demoAuditLogs,
@@ -34,6 +39,11 @@ import {
   rideActivitySeries,
 } from "./mock-data";
 
+const LIVE_RIDE_STATUSES = new Set(["searching", "assigned", "arrived", "in_progress"]);
+
+/** In-memory outbound queue for the notifications composer / auto alerts demo. */
+const outboundNotifications: OutboundNotification[] = [];
+
 const delay = (ms = 200) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export function getDataMode(): DataMode {
@@ -48,11 +58,15 @@ export async function getDashboard() {
     kpis: demoKpis as DashboardKpis,
     activity: rideActivitySeries,
     events: operationalEvents,
-    recentRides: demoRides.slice(0, 6),
+    recentRides: demoRides.slice(0, 8),
     pendingApprovals: demoPilots.filter((p) =>
       ["pending", "under_review", "needs_correction"].includes(p.verification),
     ),
     criticalAlerts: demoIncidents.filter((i) => i.status !== "resolved"),
+    pendingVehicles: demoVehicles.filter((v) =>
+      ["pending", "under_review", "needs_correction"].includes(v.verification),
+    ),
+    unassignedVehicles: demoVehicles.filter((v) => !v.pilotId),
   };
 }
 
@@ -60,6 +74,10 @@ export async function listRides(filters?: {
   q?: string;
   status?: string;
   category?: string;
+  mode?: string;
+  zoneId?: string;
+  assignment?: string;
+  payment?: string;
 }): Promise<Ride[]> {
   await delay();
   let rows = [...demoRides];
@@ -77,6 +95,20 @@ export async function listRides(filters?: {
   }
   if (filters?.category && filters.category !== "all") {
     rows = rows.filter((r) => r.vehicleCategory === filters.category);
+  }
+  if (filters?.mode && filters.mode !== "all") {
+    rows = rows.filter((r) => r.mode === filters.mode);
+  }
+  if (filters?.zoneId && filters.zoneId !== "all") {
+    rows = rows.filter((r) => r.zoneId === filters.zoneId);
+  }
+  if (filters?.assignment === "assigned") {
+    rows = rows.filter((r) => Boolean(r.pilotId));
+  } else if (filters?.assignment === "unassigned") {
+    rows = rows.filter((r) => !r.pilotId);
+  }
+  if (filters?.payment && filters.payment !== "all") {
+    rows = rows.filter((r) => r.paymentStatus === filters.payment);
   }
   return rows;
 }
@@ -121,17 +153,26 @@ export async function getRideTimeline(id: string): Promise<RideTimelineEvent[]> 
   return events;
 }
 
-export async function listCustomers(q?: string): Promise<Customer[]> {
+export async function listCustomers(filters?: {
+  q?: string;
+  zoneId?: string;
+}): Promise<Customer[]> {
   await delay();
-  if (!q) return demoCustomers;
-  const query = q.toLowerCase();
-  return demoCustomers.filter(
-    (c) =>
-      c.name.toLowerCase().includes(query) ||
-      c.email.toLowerCase().includes(query) ||
-      c.phone.includes(query) ||
-      c.id.toLowerCase().includes(query),
-  );
+  let rows = [...demoCustomers];
+  if (filters?.q) {
+    const query = filters.q.toLowerCase();
+    rows = rows.filter(
+      (c) =>
+        c.name.toLowerCase().includes(query) ||
+        c.email.toLowerCase().includes(query) ||
+        c.phone.includes(query) ||
+        c.id.toLowerCase().includes(query),
+    );
+  }
+  if (filters?.zoneId && filters.zoneId !== "all") {
+    rows = rows.filter((c) => c.zoneId === filters.zoneId);
+  }
+  return rows;
 }
 
 export async function getCustomer(id: string): Promise<Customer | null> {
@@ -165,9 +206,38 @@ export async function getPilot(id: string): Promise<Pilot | null> {
   return demoPilots.find((p) => p.id === id) ?? null;
 }
 
-export async function listVehicles(): Promise<Vehicle[]> {
+export async function listVehicles(filters?: {
+  q?: string;
+  verification?: string;
+  category?: string;
+  assignment?: string;
+}): Promise<Vehicle[]> {
   await delay();
-  return demoVehicles;
+  let rows = [...demoVehicles];
+  if (filters?.q) {
+    const q = filters.q.toLowerCase();
+    rows = rows.filter(
+      (v) =>
+        v.id.toLowerCase().includes(q) ||
+        v.plate.toLowerCase().includes(q) ||
+        v.make.toLowerCase().includes(q) ||
+        v.model.toLowerCase().includes(q) ||
+        v.city.toLowerCase().includes(q) ||
+        (v.pilotName?.toLowerCase().includes(q) ?? false),
+    );
+  }
+  if (filters?.verification && filters.verification !== "all") {
+    rows = rows.filter((v) => v.verification === filters.verification);
+  }
+  if (filters?.category && filters.category !== "all") {
+    rows = rows.filter((v) => v.category === filters.category);
+  }
+  if (filters?.assignment === "assigned") {
+    rows = rows.filter((v) => Boolean(v.pilotId));
+  } else if (filters?.assignment === "unassigned") {
+    rows = rows.filter((v) => !v.pilotId);
+  }
+  return rows;
 }
 
 export type GlobalSearchHit = {
@@ -273,14 +343,68 @@ export async function listTransactions(): Promise<Transaction[]> {
   return demoTransactions;
 }
 
-export async function listIncidents(): Promise<SosIncident[]> {
+export async function listIncidents(filters?: {
+  zoneId?: string;
+  status?: string;
+}): Promise<SosIncident[]> {
   await delay();
-  return demoIncidents;
+  let rows = [...demoIncidents];
+  if (filters?.zoneId && filters.zoneId !== ALL_ZONES_ID) {
+    rows = rows.filter((i) => i.zoneId === filters.zoneId);
+  }
+  if (filters?.status && filters.status !== "all") {
+    rows = rows.filter((i) => i.status === filters.status);
+  }
+  return rows;
 }
 
 export async function getIncident(id: string): Promise<SosIncident | null> {
   await delay();
   return demoIncidents.find((i) => i.id === id) ?? null;
+}
+
+/** Zone-filtered live rides + open SOS for Hyderabad Live Operations. */
+export async function getLiveOperations(
+  zoneId: ZoneSelectionId = ALL_ZONES_ID,
+): Promise<LiveOperationsSnapshot> {
+  await delay();
+  const allActive = demoRides.filter((r) => LIVE_RIDE_STATUSES.has(r.status));
+  const allOpenSos = demoIncidents.filter((i) => i.status !== "resolved");
+
+  const activeRides =
+    zoneId === ALL_ZONES_ID
+      ? allActive.filter((r) => r.zoneId != null)
+      : allActive.filter((r) => r.zoneId === zoneId);
+  const openSos =
+    zoneId === ALL_ZONES_ID
+      ? allOpenSos
+      : allOpenSos.filter((i) => i.zoneId === zoneId);
+
+  const byZone = OPERATIONAL_ZONES.map((zone) => {
+    const zoneRides = allActive.filter((r) => r.zoneId === zone.id);
+    return {
+      zoneId: zone.id,
+      activeRides: zoneRides.length,
+      openSos: allOpenSos.filter((i) => i.zoneId === zone.id).length,
+      searching: zoneRides.filter((r) => r.status === "searching").length,
+    };
+  }).filter((row) => row.activeRides > 0 || row.openSos > 0);
+
+  return {
+    zoneId,
+    activeRides,
+    openSos,
+    counts: {
+      activeRides: activeRides.length,
+      searching: activeRides.filter((r) => r.status === "searching").length,
+      inProgress: activeRides.filter((r) =>
+        ["arrived", "in_progress", "assigned"].includes(r.status),
+      ).length,
+      openSos: openSos.length,
+      criticalSos: openSos.filter((i) => i.severity === "critical").length,
+    },
+    byZone,
+  };
 }
 
 export async function listTickets(filters?: {
@@ -378,6 +502,12 @@ export async function listNotifications(): Promise<AdminNotification[]> {
   );
 }
 
+/** Open (non-resolved) SOS incidents — used for sidebar / topbar badges. */
+export async function getOpenSosCount(): Promise<number> {
+  await delay(80);
+  return demoIncidents.filter((i) => i.status !== "resolved").length;
+}
+
 export async function getUnreadNotificationCount(): Promise<number> {
   await delay(80);
   return demoNotifications.filter((n) => !n.read).length;
@@ -395,3 +525,63 @@ export async function markAllNotificationsRead(): Promise<void> {
     n.read = true;
   });
 }
+
+export async function listOutboundNotifications(): Promise<OutboundNotification[]> {
+  await delay(80);
+  return [...outboundNotifications].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+  );
+}
+
+export async function queueManualNotification(input: {
+  audience: "customers" | "pilots" | "all";
+  title: string;
+  body: string;
+}): Promise<OutboundNotification> {
+  await delay(400);
+  const item: OutboundNotification = {
+    id: `OB-MAN-${Date.now().toString(36)}`,
+    trigger: "manual",
+    audience: input.audience === "customers" ? "customer" : input.audience === "pilots" ? "pilot" : "all",
+    title: input.title.trim(),
+    body: input.body.trim(),
+    createdAt: new Date().toISOString(),
+  };
+  outboundNotifications.unshift(item);
+
+  demoNotifications.unshift({
+    id: `NT-MAN-${Date.now().toString(36)}`,
+    title: `Queued · ${item.title}`,
+    body: `Manual ${item.audience} blast queued locally. ${item.body}`,
+    category: "system",
+    href: "/notifications",
+    createdAt: item.createdAt,
+    read: false,
+  });
+
+  return item;
+}
+
+/**
+ * Fires an automatic location-based alert: admin inbox row + outbound copy for pilot/customer.
+ * Frontend-only until a notification backend is connected.
+ */
+export async function triggerLocationAlert(
+  trigger: LocationAlertTrigger,
+): Promise<{ admin: AdminNotification; outbound: OutboundNotification[] }> {
+  await delay(350);
+  const bundle = buildLocationAlertBundle(trigger);
+  demoNotifications.unshift(bundle.admin);
+  outboundNotifications.unshift(...bundle.outbound);
+  return bundle;
+}
+
+/** Zone analytics — see `zone-analytics.ts` for DEMO DATA fixtures and API contract. */
+export {
+  downloadCsv,
+  getZoneAnalytics,
+  getZoneAnalyticsBundle,
+  getZoneDetail,
+  listOperationalZones,
+  zoneReportToCsv,
+} from "./zone-analytics";

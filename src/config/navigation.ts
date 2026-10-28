@@ -23,12 +23,25 @@ export type NavItem = {
   label: string;
   href: string;
   icon: LucideIcon;
+  /** Visual emphasis for critical nav destinations (e.g. SOS). */
+  emphasis?: "danger";
+  /** Show live open-SOS count badge on this item. */
+  showSosBadge?: boolean;
 };
 
 export type NavGroup = {
   id: string;
   label: string;
   items: NavItem[];
+};
+
+/** Primary critical safety destination — also pinned in the sidebar / topbar. */
+export const SOS_NAV_ITEM: NavItem = {
+  label: "SOS Queue",
+  href: "/safety",
+  icon: ShieldAlert,
+  emphasis: "danger",
+  showSosBadge: true,
 };
 
 export const navGroups: NavGroup[] = [
@@ -38,6 +51,7 @@ export const navGroups: NavGroup[] = [
     items: [
       { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
       { label: "Live Operations", href: "/live-operations", icon: Radio },
+      SOS_NAV_ITEM,
       { label: "Analytics & Reports", href: "/analytics", icon: BarChart3 },
     ],
   },
@@ -65,7 +79,6 @@ export const navGroups: NavGroup[] = [
     id: "trust",
     label: "Trust & Support",
     items: [
-      { label: "Safety & SOS", href: "/safety", icon: ShieldAlert },
       { label: "Support Tickets", href: "/support", icon: LifeBuoy },
       { label: "Notifications", href: "/notifications", icon: Bell },
     ],
@@ -84,6 +97,15 @@ export const navGroups: NavGroup[] = [
 export const flatNavItems = navGroups.flatMap((group) => group.items);
 
 export function getNavLabel(pathname: string): string {
+  if (pathname.startsWith("/analytics/zones/")) {
+    return "Zone Operations";
+  }
+  if (pathname.startsWith("/live-operations")) {
+    return "Live Operations";
+  }
+  if (pathname === "/safety" || pathname.startsWith("/safety/")) {
+    return "SOS Queue";
+  }
   const exact = flatNavItems.find((item) => item.href === pathname);
   if (exact) return exact.label;
   const nested = flatNavItems.find(

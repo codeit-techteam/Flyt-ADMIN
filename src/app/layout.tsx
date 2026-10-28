@@ -32,8 +32,14 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${manrope.variable} ${quicksand.variable}`}>
-      <body className={manrope.className}>
+    // suppressHydrationWarning: next/font CSS variables on <html> can differ
+    // between SSR and the first client paint (extensions / font swap).
+    <html
+      lang="en"
+      className={`${manrope.variable} ${quicksand.variable}`}
+      suppressHydrationWarning
+    >
+      <body className={manrope.className} suppressHydrationWarning>
         <ToastProvider>{children}</ToastProvider>
       </body>
     </html>

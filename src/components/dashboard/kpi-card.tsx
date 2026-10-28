@@ -51,10 +51,10 @@ export function KpiCard({
   const content = (
     <div
       className={cn(
-        "group relative overflow-hidden rounded-2xl border p-4 shadow-[var(--shadow-card)] transition duration-200",
-        href && "hover:-translate-y-0.5 hover:shadow-[var(--shadow-overlay)]",
+        "group relative flex h-full min-h-[7.25rem] flex-col overflow-hidden rounded-2xl border p-4 shadow-[var(--shadow-card)] transition duration-200",
+        href && "cursor-pointer hover:-translate-y-0.5 hover:shadow-[var(--shadow-overlay)]",
         toneStyles.card,
-        size === "lg" && "p-5",
+        size === "lg" && "min-h-[8rem] p-5",
       )}
     >
       <div
@@ -63,8 +63,8 @@ export function KpiCard({
           toneStyles.glow,
         )}
       />
-      <div className="relative flex items-start justify-between gap-3">
-        <div className="min-w-0">
+      <div className="relative flex flex-1 items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
           <p className="text-[11px] font-semibold uppercase tracking-wider text-muted">{label}</p>
           <p
             className={cn(
@@ -74,20 +74,30 @@ export function KpiCard({
           >
             {value}
           </p>
-          {hint ? <p className="mt-1.5 text-xs font-medium text-muted">{hint}</p> : null}
+          <p className={cn("mt-1.5 text-xs font-medium", hint ? "text-muted" : "invisible")}>
+            {hint || "—"}
+          </p>
         </div>
-        <div className="flex flex-col items-end gap-2">
+        <div className="flex shrink-0 flex-col items-end gap-2">
           <span className={cn("rounded-xl p-2.5 transition group-hover:scale-105", toneStyles.icon)}>
             <Icon className={cn(size === "lg" ? "h-5 w-5" : "h-4 w-4")} />
           </span>
           {href ? (
-            <ArrowUpRight className="h-3.5 w-3.5 text-muted opacity-0 transition group-hover:opacity-100" />
-          ) : null}
+            <ArrowUpRight className="h-3.5 w-3.5 text-muted opacity-40 transition group-hover:opacity-100" />
+          ) : (
+            <span className="h-3.5 w-3.5" aria-hidden />
+          )}
         </div>
       </div>
     </div>
   );
 
-  if (href) return <Link href={href}>{content}</Link>;
+  if (href) {
+    return (
+      <Link href={href} className="block h-full min-w-0" aria-label={`${label}: ${value}`}>
+        {content}
+      </Link>
+    );
+  }
   return content;
 }
