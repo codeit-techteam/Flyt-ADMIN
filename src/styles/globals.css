@@ -1,0 +1,48 @@
+@import "tailwindcss";
+
+@theme {
+  --color-flyt-purple: #3d1e63;
+  --color-flyt-purple-soft: #ede8f3;
+  --color-flyt-purple-hover: #32184f;
+  --color-ink: #14151f;
+  --color-ground: #f5f6fa;
+  --color-surface: #ffffff;
+  --color-muted: #6b7280;
+  --color-border: #e5e7eb;
+  --color-border-strong: #d1d5db;
+  --color-success: #16a34a;
+  --color-success-soft: #dcfce7;
+  --color-warning: #d97706;
+  --color-warning-soft: #fef3c7;
+  --color-danger: #dc2626;
+  --color-danger-soft: #fee2e2;
+  --color-info: #2563eb;
+  --color-info-soft: #dbeafe;
+  --font-sans: var(--font-manrope), ui-sans-serif, system-ui, sans-serif;
+  --font-brand: var(--font-quicksand), ui-sans-serif, system-ui, sans-serif;
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --shadow-card: 0 1px 2px rgb(20 21 31 / 0.04), 0 1px 3px rgb(20 21 31 / 0.06);
+  --shadow-overlay: 0 10px 30px rgb(20 21 31 / 0.12);
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-ground text-ink antialiased;
+    font-family: var(--font-sans);
+  }
+
+  ::selection {
+    background: color-mix(in srgb, var(--color-flyt-purple) 20%, white);
+  }
+}
