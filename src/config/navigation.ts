@@ -51,7 +51,7 @@ export const navGroups: NavGroup[] = [
     items: [
       { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
       { label: "Live Operations", href: "/live-operations", icon: Radio },
-      SOS_NAV_ITEM,
+      // SOS lives in the pinned Priority card — omit here to avoid duplicate / false-active styling.
       { label: "Analytics & Reports", href: "/analytics", icon: BarChart3 },
     ],
   },
@@ -70,8 +70,8 @@ export const navGroups: NavGroup[] = [
     id: "commerce",
     label: "Commerce",
     items: [
-      { label: "Pricing & Promotions", href: "/pricing", icon: Ticket },
-      { label: "Payments & Payouts", href: "/payments", icon: Wallet },
+      { label: "Pricing", href: "/pricing", icon: Ticket },
+      { label: "Payments", href: "/payments", icon: Wallet },
       { label: "CMS", href: "/cms", icon: Megaphone },
     ],
   },
@@ -105,6 +105,12 @@ export function getNavLabel(pathname: string): string {
   }
   if (pathname === "/safety" || pathname.startsWith("/safety/")) {
     return "SOS Queue";
+  }
+  if (pathname === "/pricing" || pathname.startsWith("/pricing/")) {
+    return "Pricing & Promotions";
+  }
+  if (pathname === "/payments" || pathname.startsWith("/payments/")) {
+    return "Payments & Payouts";
   }
   const exact = flatNavItems.find((item) => item.href === pathname);
   if (exact) return exact.label;
